@@ -1,0 +1,12 @@
+{
+  "name": "sidesplitters-scraper",
+  "version": "1.0.0",
+  "description": "Scrapes upcoming shows from OvationTix for Sidesplitters Comedy",
+  "main": "scrape.js",
+  "scripts": {
+    "scrape": "node scrape.js"
+  },
+  "dependencies": {
+    "puppeteer": "^23.0.0"
+  }
+}

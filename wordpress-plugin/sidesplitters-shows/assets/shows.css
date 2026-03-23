@@ -1,0 +1,79 @@
+/* Sidesplitters Shows - 3-column responsive grid */
+
+.sss-shows-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px 0;
+}
+
+.sss-show-card {
+    text-align: center;
+}
+
+.sss-show-link {
+    text-decoration: none;
+    display: block;
+    transition: transform 0.2s ease;
+}
+
+.sss-show-link:hover {
+    transform: translateY(-4px);
+}
+
+.sss-show-image {
+    width: 100%;
+    overflow: hidden;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.sss-show-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+}
+
+.sss-show-name {
+    color: #dc3545;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 5px 0;
+    line-height: 1.2;
+}
+
+.sss-show-link:hover .sss-show-name {
+    color: #a71d2a;
+}
+
+.sss-show-dates {
+    color: #dc3545;
+    font-size: 1rem;
+    font-weight: 400;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Responsive: 2 columns on tablet */
+@media (max-width: 900px) {
+    .sss-shows-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+}
+
+/* Responsive: 1 column on mobile */
+@media (max-width: 600px) {
+    .sss-shows-grid {
+        grid-template-columns: 1fr;
+        gap: 25px;
+    }
+
+    .sss-show-name {
+        font-size: 1.25rem;
+    }
+}
