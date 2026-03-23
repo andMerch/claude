@@ -5,7 +5,13 @@
   "main": "scrape.js",
   "scripts": {
     "scrape": "node scrape.js",
-    "discover": "DISCOVERY_MODE=true node scrape.js"
+    "discover": "DISCOVERY_MODE=true node scrape.js",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0"
   },
   "dependencies": {
     "puppeteer": "^23.0.0",

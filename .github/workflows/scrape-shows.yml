@@ -10,6 +10,10 @@ on:
         description: 'Enable discovery mode (saves screenshots + HTML for debugging selectors)'
         type: boolean
         default: false
+      webhook_type:
+        description: 'Webhook format: discord, slack, or generic (auto-detects from URL if empty)'
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -41,6 +45,8 @@ jobs:
         working-directory: scraper
         env:
           DISCOVERY_MODE: ${{ inputs.discovery_mode || 'false' }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_TYPE: ${{ inputs.webhook_type || '' }}
         run: node scrape.js
 
       - name: Upload discovery artifacts

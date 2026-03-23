@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const path = require('path');
+const { notify } = require('./notify');
 
 puppeteer.use(StealthPlugin());
 
@@ -46,6 +47,7 @@ async function scrapeLocation(browser, locationKey, location) {
 
     // Log page title and content length for debugging
     const pageTitle = await page.title();
+    // eslint-disable-next-line no-undef
     const bodyText = await page.evaluate(() => document.body ? document.body.innerText.length : 0);
     console.log(`  Page title: "${pageTitle}", body text length: ${bodyText}`);
 
@@ -62,6 +64,7 @@ async function scrapeLocation(browser, locationKey, location) {
     }
 
     // Extract show data from the page
+    /* eslint-disable no-undef -- page.evaluate runs in browser context */
     const shows = await page.evaluate((selectors, locUrl) => {
       const results = [];
 
@@ -263,8 +266,15 @@ async function main() {
   await browser.close();
 
   if (anySuccess) {
+    // Snapshot old data before overwriting for notification comparison
+    const oldData = { ...existing };
     fs.writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2));
     console.log(`\nOutput written to ${OUTPUT_PATH}`);
+
+    // Send notifications for any newly added shows
+    await notify(oldData).catch((err) => {
+      console.error('Notification error (non-fatal):', err.message);
+    });
   } else {
     console.error('\nAll scrapes failed. Keeping existing data.');
     process.exit(1);
