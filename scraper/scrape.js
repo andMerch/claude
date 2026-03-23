@@ -22,14 +22,19 @@ async function scrapeLocation(browser, locationKey, location) {
   const page = await browser.newPage();
 
   await page.setViewport({ width: 1280, height: 900 });
+  await page.setUserAgent(
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+  );
 
   console.log(`Scraping ${location.name} (${location.url})...`);
 
   try {
-    await page.goto(location.url, {
+    const response = await page.goto(location.url, {
       waitUntil: 'networkidle2',
       timeout: 60000,
     });
+
+    console.log(`  HTTP status: ${response ? response.status() : 'unknown'}`);
 
     // Wait for event listings to appear
     await page.waitForSelector('img', { timeout: 15000 }).catch(() => {
@@ -37,7 +42,12 @@ async function scrapeLocation(browser, locationKey, location) {
     });
 
     // Give extra time for dynamic content
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 5000));
+
+    // Log page title and content length for debugging
+    const pageTitle = await page.title();
+    const bodyText = await page.evaluate(() => document.body ? document.body.innerText.length : 0);
+    console.log(`  Page title: "${pageTitle}", body text length: ${bodyText}`);
 
     // Discovery mode: save screenshot and HTML for debugging selectors
     if (DISCOVERY_MODE) {
@@ -170,23 +180,31 @@ async function scrapeLocation(browser, locationKey, location) {
     console.log(`  Found ${shows.length} shows for ${location.name}`);
     shows.forEach((s) => console.log(`    - ${s.name} (${s.dates})`));
 
-    if (shows.length === 0 && DISCOVERY_MODE) {
-      console.log(`  Discovery: No shows found. Check screenshots/${locationKey}.html for the actual DOM structure.`);
+    if (shows.length === 0) {
+      console.log(`  No shows found. Saving debug screenshot and HTML...`);
+      fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+      await page.screenshot({
+        path: path.join(SCREENSHOTS_DIR, `${locationKey}-empty.png`),
+        fullPage: true,
+      }).catch(() => {});
+      const html = await page.content();
+      fs.writeFileSync(path.join(SCREENSHOTS_DIR, `${locationKey}-empty.html`), html);
     }
 
     await page.close();
     return shows;
   } catch (err) {
     console.error(`  Error scraping ${location.name}:`, err.message);
+    console.error(`  Stack:`, err.stack);
 
-    // Save error screenshot in discovery mode
-    if (DISCOVERY_MODE) {
-      fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
-      await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, `${locationKey}-error.png`),
-        fullPage: true,
-      }).catch(() => {});
-    }
+    // Always save error screenshot for debugging
+    fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, `${locationKey}-error.png`),
+      fullPage: true,
+    }).catch((screenshotErr) => {
+      console.error(`  Could not save error screenshot:`, screenshotErr.message);
+    });
 
     await page.close();
     return null;
@@ -203,12 +221,15 @@ async function main() {
   }
 
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--window-size=1280,900',
     ],
   });
 

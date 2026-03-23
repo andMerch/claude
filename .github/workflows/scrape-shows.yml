@@ -28,6 +28,11 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install system dependencies for Puppeteer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgbm-dev libnss3 libatk-bridge2.0-0 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libcups2 libasound2t64 || sudo apt-get install -y libasound2
+
       - name: Install dependencies
         working-directory: scraper
         run: npm ci || npm install
@@ -39,12 +44,13 @@ jobs:
         run: node scrape.js
 
       - name: Upload discovery artifacts
-        if: inputs.discovery_mode
+        if: always() && (inputs.discovery_mode || failure())
         uses: actions/upload-artifact@v4
         with:
           name: discovery-screenshots
           path: scraper/screenshots/
           retention-days: 7
+          if-no-files-found: ignore
 
       - name: Check for changes
         id: changes
