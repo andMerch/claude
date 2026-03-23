@@ -4,7 +4,12 @@ on:
   schedule:
     # Run every 6 hours
     - cron: '0 */6 * * *'
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      discovery_mode:
+        description: 'Enable discovery mode (saves screenshots + HTML for debugging selectors)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -12,6 +17,7 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
@@ -30,7 +36,17 @@ jobs:
 
       - name: Run scraper
         working-directory: scraper
+        env:
+          DISCOVERY_MODE: ${{ inputs.discovery_mode || 'false' }}
         run: node scrape.js
+
+      - name: Upload discovery artifacts
+        if: inputs.discovery_mode
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-screenshots
+          path: scraper/screenshots/
+          retention-days: 7
 
       - name: Check for changes
         id: changes
