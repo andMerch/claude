@@ -10,23 +10,12 @@ const OUTPUT_PATH = path.join(__dirname, '..', 'docs', 'shows.json');
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots');
 const DISCOVERY_MODE = process.env.DISCOVERY_MODE === 'true';
 
-// Configurable selectors — update these after inspecting the OvationTix DOM
+// Selectors tuned to OvationTix DOM structure
 const SELECTORS = {
-  eventCard: [
-    '.production-listing',
-    '.prod-perf-container',
-    '.production-container',
-    '.event-listing',
-    '.event-item',
-    '.production-list-item',
-    '[class*="production"]',
-    '[class*="event"]',
-    '.performance-group',
-  ],
-  eventName: 'h1, h2, h3, h4, h5, .title, .name, [class*="title"], [class*="name"]',
+  // "See this event" buttons are the most reliable anchor on OvationTix pages
+  seeEventButton: 'a',
+  seeEventText: 'see this event',
   eventImage: 'img',
-  eventDates: '.date, .dates, [class*="date"], time',
-  eventLink: 'a[href*="production"], a[href*="ticket"], a[href*="event"]',
 };
 
 async function scrapeLocation(browser, locationKey, location) {
@@ -66,83 +55,65 @@ async function scrapeLocation(browser, locationKey, location) {
     const shows = await page.evaluate((selectors, locUrl) => {
       const results = [];
 
-      // Strategy 1: Try configured event card selectors
-      let eventElements = [];
-      for (const selector of selectors.eventCard) {
-        const els = document.querySelectorAll(selector);
-        if (els.length > 0) {
-          eventElements = Array.from(els);
-          break;
-        }
-      }
+      // Strategy: Find all "See this event" links, then walk up to the show card
+      const allLinks = document.querySelectorAll(selectors.seeEventButton);
+      const eventLinks = Array.from(allLinks).filter(
+        (a) => a.textContent.trim().toLowerCase().includes(selectors.seeEventText)
+      );
 
-      // Strategy 2: Look for links containing "production"
-      if (eventElements.length === 0) {
-        const allLinks = document.querySelectorAll('a[href*="production"]');
-        if (allLinks.length > 0) {
-          eventElements = Array.from(allLinks);
-        }
-      }
+      console.log(`  Found ${eventLinks.length} "See this event" buttons`);
 
-      // Strategy 3: Find image+text+date patterns in the page
-      if (eventElements.length === 0) {
-        const containers = document.querySelectorAll('div, article, section, li');
-        for (const container of containers) {
-          const img = container.querySelector('img');
-          const hasText = container.textContent.trim().length > 10;
-          const hasDate = /\d{1,2}[\/\-]\d{1,2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(
-            container.textContent
-          );
-          if (img && hasText && hasDate) {
-            const isParent = eventElements.some((el) => container.contains(el));
-            if (!isParent) {
-              eventElements.push(container);
-            }
-          }
-        }
-      }
+      for (const link of eventLinks) {
+        const ticketUrl = link.href || locUrl;
 
-      for (const el of eventElements) {
-        const img = el.querySelector(selectors.eventImage);
+        // Walk up to find the show card container (parent with image)
+        let card = link.parentElement;
+        let img = null;
+        for (let i = 0; i < 6 && card; i++) {
+          img = card.querySelector(selectors.eventImage);
+          if (img && card.textContent.trim().length > 10) break;
+          card = card.parentElement;
+        }
+        if (!card) continue;
+
+        // Extract image URL
         const imageUrl = img ? img.src || img.getAttribute('data-src') || '' : '';
 
-        // Skip tiny images (likely icons)
-        if (img && img.naturalWidth > 0 && img.naturalWidth < 50) continue;
-
-        // Extract name
+        // Extract name: find the most prominent text (heading or largest text element)
         let name = '';
-        const heading = el.querySelector(selectors.eventName);
+        const heading = card.querySelector('h1, h2, h3, h4, h5, h6');
         if (heading) {
           name = heading.textContent.trim();
         } else {
-          const strong = el.querySelector('strong, b');
-          if (strong) name = strong.textContent.trim();
-        }
-
-        // Extract dates
-        let dates = '';
-        const dateEl = el.querySelector(selectors.eventDates);
-        if (dateEl) {
-          dates = dateEl.textContent.trim();
-        } else {
-          const text = el.textContent;
-          const dateMatch = text.match(
-            /(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[,.]?\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?(?:[,.]?\s+\d{4})?(?:\s*[-–]\s*(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[,.]?\s+)?(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+)?\d{1,2}(?:st|nd|rd|th)?(?:[,.]?\s+\d{4})?)?/i
-          );
-          if (dateMatch) {
-            dates = dateMatch[0].trim();
+          // Look for the element with the largest/boldest text that isn't the button
+          const textEls = card.querySelectorAll('span, div, p, strong, b, a');
+          let best = '';
+          for (const el of textEls) {
+            const text = el.textContent.trim();
+            // Skip the "See this event" button text and very short/long strings
+            if (text.toLowerCase().includes('see this event')) continue;
+            if (text.toLowerCase().includes('special event')) continue;
+            if (text.length < 3 || text.length > 100) continue;
+            // Skip date-like strings
+            if (/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i.test(text)) continue;
+            // Prefer elements that are direct children and have no child elements with text
+            const childText = Array.from(el.children).map((c) => c.textContent.trim()).join('');
+            if (childText.length > 0 && childText.length >= text.length * 0.8) continue;
+            if (text.length > best.length && text.length <= 80) {
+              best = text;
+            }
           }
+          name = best;
         }
 
-        // Extract ticket URL
-        let ticketUrl = '';
-        const link = el.querySelector(selectors.eventLink);
-        if (link) {
-          ticketUrl = link.href;
-        } else if (el.tagName === 'A') {
-          ticketUrl = el.href;
-        } else {
-          ticketUrl = locUrl;
+        // Extract dates from card text
+        let dates = '';
+        const cardText = card.textContent;
+        const dateMatch = cardText.match(
+          /(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[,.]?\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?(?:[,.]?\s+\d{4})?(?:\s*[-–]\s*(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[,.]?\s+)?(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+)?\d{1,2}(?:st|nd|rd|th)?(?:[,.]?\s+\d{4})?)?/i
+        );
+        if (dateMatch) {
+          dates = dateMatch[0].trim();
         }
 
         if (name || imageUrl) {
@@ -152,6 +123,38 @@ async function scrapeLocation(browser, locationKey, location) {
             imageUrl,
             ticketUrl,
           });
+        }
+      }
+
+      // Fallback: if no "See this event" buttons found, try finding cards with images + links
+      if (results.length === 0) {
+        const allCards = document.querySelectorAll('div, article, section, li');
+        for (const card of allCards) {
+          const img = card.querySelector('img');
+          const link = card.querySelector('a[href]');
+          if (!img || !link) continue;
+          // Must have reasonable text content
+          const text = card.textContent.trim();
+          if (text.length < 10 || text.length > 500) continue;
+          // Must have a date
+          const hasDate = /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}/i.test(text);
+          if (!hasDate) continue;
+
+          const imageUrl = img.src || '';
+          const heading = card.querySelector('h1, h2, h3, h4, h5, h6, strong, b');
+          const name = heading ? heading.textContent.trim() : '';
+          const dateMatch = text.match(
+            /(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[,.]?\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*[-–]\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+)?\d{1,2}(?:st|nd|rd|th)?)?/i
+          );
+
+          if (name || imageUrl) {
+            results.push({
+              name: name || 'Unknown Show',
+              dates: dateMatch ? dateMatch[0].trim() : '',
+              imageUrl,
+              ticketUrl: link.href,
+            });
+          }
         }
       }
 
