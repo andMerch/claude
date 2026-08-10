@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-08-10T07:48:59.847Z",
+  "lastUpdated": "2026-08-10T13:17:54.530Z",
   "locations": {
     "tampa": {
       "id": "35578",
@@ -7,7 +7,14 @@
     },
     "wesley-chapel": {
       "id": "35579",
-      "shows": []
+      "shows": [
+        {
+          "name": "Unknown Show",
+          "dates": "Thu, Aug 13",
+          "imageUrl": "https://proprodsharedassetscdn.blob.core.windows.net/ovationtix-public-client-assets/prod/client_id_35579/logo_images/sscc_2019clublogo_clr_1080X365_1.0.jpg",
+          "ticketUrl": "https://ci.ovationtix.com/35579/checkout/cart"
+        }
+      ]
     }
   }
 }
